@@ -56,6 +56,11 @@ public class FileUploadBO {
         }
     }
 
+    // Alias method for updateStatus (used by AnalyzerWorker)
+    public boolean updateStatus(int id, String status) {
+        return updateFileStatus(id, status);
+    }
+
     // Xóa file
     public boolean deleteFile(int id) {
         try {

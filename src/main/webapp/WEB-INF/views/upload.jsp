@@ -122,6 +122,7 @@
             background: linear-gradient(135deg, #f8f9fb 0%, #f5f7fa 100%);
             position: relative;
             overflow: hidden;
+            z-index: 1;
         }
 
         .upload-area::before {
@@ -150,7 +151,12 @@
 
         .upload-content {
             position: relative;
-            z-index: 1;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .upload-content * {
+            pointer-events: none;
         }
 
         .upload-icon {
@@ -175,10 +181,6 @@
             font-size: 14px;
             color: #667177;
             line-height: 1.6;
-        }
-
-        #fileInput {
-            display: none;
         }
 
         .selected-file {
@@ -408,23 +410,18 @@
         <div class="upload-section">
             <label class="upload-label">Tải lên file</label>
             <form id="uploadForm" method="post" enctype="multipart/form-data" action="${pageContext.request.contextPath}/upload">
+                <input type="file" id="fileInput" name="files" accept=".pcap,.pcapng,.cap,.log,.txt,.csv" multiple style="display: none;">
+                
                 <div class="upload-area" id="uploadArea">
                     <div class="upload-content">
                         <div class="upload-icon">⬆️</div>
                         <div class="upload-text">Kéo thả file vào đây</div>
-                        <div class="upload-hint">hoặc <strong>click để chọn</strong> • Hỗ trợ .pcap, .pcapng, .cap, .log, .txt, .csv (Tối đa 500MB)</div>
-                        <input type="file" id="fileInput" name="file" accept=".pcap,.pcapng,.cap,.log,.txt,.csv">
+                        <div class="upload-hint">hoặc <strong>click để chọn</strong> • Hỗ trợ .pcap, .pcapng, .cap, .log, .txt, .csv (Tối đa 500MB/file)</div>
                     </div>
                 </div>
 
                 <div class="selected-file" id="selectedFile">
-                    <div class="file-info">
-                        <div class="file-details">
-                            <div class="file-name" id="fileName"></div>
-                            <div class="file-size" id="fileSize"></div>
-                        </div>
-                        <button type="button" class="btn btn-secondary" onclick="clearFile()" style="padding: 8px 16px;">✕ Xóa</button>
-                    </div>
+                    <div id="filesList"></div>
                     <div class="progress-bar" id="progressBar">
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
@@ -465,9 +462,9 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <a href="${pageContext.request.contextPath}/analyze?id=${file.id}" 
+                                        <a href="${pageContext.request.contextPath}/analysis-result?fileId=${file.id}" 
                                            class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">
-                                            🔍 Phân tích
+                                            📊 Xem kết quả
                                         </a>
                                     </td>
                                 </tr>
@@ -489,15 +486,15 @@
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const selectedFile = document.getElementById('selectedFile');
-        const fileName = document.getElementById('fileName');
-        const fileSize = document.getElementById('fileSize');
         const uploadBtn = document.getElementById('uploadBtn');
         const uploadForm = document.getElementById('uploadForm');
         const progressBar = document.getElementById('progressBar');
         const progressFill = document.getElementById('progressFill');
 
-        // Click to select file
-        uploadArea.addEventListener('click', () => {
+        // Click to select file - prevent event bubbling and trigger file input
+        uploadArea.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             fileInput.click();
         });
 
@@ -524,11 +521,71 @@
 
         function handleFiles(files) {
             if (files.length > 0) {
-                const file = files[0];
-                fileName.textContent = file.name;
-                fileSize.textContent = formatBytes(file.size);
+                const filesList = document.getElementById('filesList');
+                filesList.innerHTML = '';
+                
+                let totalSize = 0;
+                Array.from(files).forEach((file, index) => {
+                    totalSize += file.size;
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-info';
+                    fileItem.style.marginBottom = index < files.length - 1 ? '12px' : '0';
+                    
+                    const fileDetails = document.createElement('div');
+                    fileDetails.className = 'file-details';
+                    
+                    const fileName = document.createElement('div');
+                    fileName.className = 'file-name';
+                    fileName.textContent = '📄 ' + file.name;
+                    
+                    const fileSize = document.createElement('div');
+                    fileSize.className = 'file-size';
+                    fileSize.textContent = formatBytes(file.size);
+                    
+                    fileDetails.appendChild(fileName);
+                    fileDetails.appendChild(fileSize);
+                    fileItem.appendChild(fileDetails);
+                    filesList.appendChild(fileItem);
+                });
+                
+                if (files.length > 1) {
+                    const totalItem = document.createElement('div');
+                    totalItem.style.marginTop = '12px';
+                    totalItem.style.paddingTop = '12px';
+                    totalItem.style.borderTop = '1px solid #93c5fd';
+                    
+                    const totalDiv = document.createElement('div');
+                    totalDiv.style.display = 'flex';
+                    totalDiv.style.justifyContent = 'space-between';
+                    totalDiv.style.alignItems = 'center';
+                    
+                    const totalLabel = document.createElement('div');
+                    totalLabel.style.fontWeight = '600';
+                    totalLabel.style.color = '#000f34';
+                    totalLabel.textContent = 'Tổng cộng: ' + files.length + ' file';
+                    
+                    const totalSizeDiv = document.createElement('div');
+                    totalSizeDiv.style.color = '#667177';
+                    totalSizeDiv.style.fontSize = '13px';
+                    totalSizeDiv.textContent = formatBytes(totalSize);
+                    
+                    totalDiv.appendChild(totalLabel);
+                    totalDiv.appendChild(totalSizeDiv);
+                    totalItem.appendChild(totalDiv);
+                    filesList.appendChild(totalItem);
+                }
+                
+                const clearBtn = document.createElement('button');
+                clearBtn.type = 'button';
+                clearBtn.className = 'btn btn-secondary';
+                clearBtn.style.cssText = 'padding: 8px 16px; margin-top: 12px; width: 100%;';
+                clearBtn.textContent = '✕ Xóa tất cả';
+                clearBtn.onclick = clearFile;
+                filesList.appendChild(clearBtn);
+                
                 selectedFile.classList.add('show');
                 uploadBtn.disabled = false;
+                uploadBtn.textContent = '📤 Upload ' + files.length + ' file' + (files.length > 1 ? 's' : '');
             }
         }
 
@@ -552,7 +609,8 @@
             if (fileInput.files.length > 0) {
                 progressBar.classList.add('show');
                 uploadBtn.disabled = true;
-                uploadBtn.textContent = '⏳ Đang upload...';
+                const fileCount = fileInput.files.length;
+                uploadBtn.textContent = '⏳ Đang upload ' + fileCount + ' file' + (fileCount > 1 ? 's' : '') + '...';
                 
                 let progress = 0;
                 const interval = setInterval(() => {

@@ -1,5 +1,7 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ page import="model.bean.User" %>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
 <%
     User user = (User) session.getAttribute("user");
     if (user == null) {
@@ -250,6 +252,145 @@
             background: #2563eb;
             transform: translateX(2px);
         }
+
+        /* Files Table Styles */
+        .files-table-container {
+            background: #1a1f2e;
+            border: 1px solid #2a3142;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .files-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .files-table thead {
+            background: #151925;
+        }
+
+        .files-table th {
+            padding: 16px 20px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #2a3142;
+        }
+
+        .files-table tbody tr {
+            border-bottom: 1px solid #2a3142;
+            transition: background 0.2s ease;
+        }
+
+        .files-table tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        .files-table tbody tr:hover {
+            background: #1e232f;
+        }
+
+        .files-table td {
+            padding: 16px 20px;
+            color: #e5e7eb;
+            font-size: 14px;
+        }
+
+        .file-name {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+        }
+
+        .file-icon {
+            font-size: 20px;
+        }
+
+        .time-cell {
+            color: #9ca3af;
+            font-size: 13px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-done {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .status-processing {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .status-failed {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .status-pending {
+            background: rgba(250, 204, 21, 0.15);
+            color: #facc15;
+            border: 1px solid rgba(250, 204, 21, 0.3);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-action {
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-view {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-view:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn-refresh {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-refresh:hover {
+            background: #4b5563;
+        }
+
+        .text-muted {
+            color: #6b7280;
+            font-size: 13px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -291,6 +432,72 @@
             </div>
         </div>
 
+        <!-- Files List Section -->
+        <c:if test="${uploadedFiles != null && uploadedFiles.size() > 0}">
+            <div style="margin-bottom: 32px;">
+                <h2 class="section-title">📂 File đã upload (${uploadedFiles.size()})</h2>
+                <div class="files-table-container">
+                    <table class="files-table">
+                        <thead>
+                            <tr>
+                                <th>Tên File</th>
+                                <th>Thời gian upload</th>
+                                <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <c:forEach items="${uploadedFiles}" var="file">
+                                <tr>
+                                    <td>
+                                        <div class="file-name">
+                                            <span class="file-icon">📄</span>
+                                            ${file.fileName}
+                                        </div>
+                                    </td>
+                                    <td class="time-cell">${file.uploadTime}</td>
+                                    <td>
+                                        <c:choose>
+                                            <c:when test="${file.status == 'DONE'}">
+                                                <span class="status-badge status-done">✓ Hoàn thành</span>
+                                            </c:when>
+                                            <c:when test="${file.status == 'PROCESSING'}">
+                                                <span class="status-badge status-processing">⏳ Đang xử lý</span>
+                                            </c:when>
+                                            <c:when test="${file.status == 'FAILED'}">
+                                                <span class="status-badge status-failed">✗ Lỗi</span>
+                                            </c:when>
+                                            <c:otherwise>
+                                                <span class="status-badge status-pending">⏸️ Chờ xử lý</span>
+                                            </c:otherwise>
+                                        </c:choose>
+                                    </td>
+                                    <td>
+                                        <div class="action-buttons">
+                                            <c:if test="${file.status == 'DONE'}">
+                                                <a href="${pageContext.request.contextPath}/analysis-result?fileId=${file.id}" 
+                                                   class="btn-action btn-view">
+                                                    🔍 Xem kết quả
+                                                </a>
+                                            </c:if>
+                                            <c:if test="${file.status == 'PROCESSING'}">
+                                                <button class="btn-action btn-refresh" onclick="location.reload()">
+                                                    🔄 Làm mới
+                                                </button>
+                                            </c:if>
+                                            <c:if test="${file.status == 'FAILED'}">
+                                                <span class="text-muted">Không có kết quả</span>
+                                            </c:if>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </c:forEach>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </c:if>
+
         <div style="margin-bottom: 32px;">
             <h2 class="section-title">Tính Năng Chính</h2>
             <div class="cards-grid">
@@ -305,35 +512,21 @@
                     <div class="feature-icon">🔍</div>
                     <h3>Phân Tích Gói Tin</h3>
                     <p>Xem chi tiết các gói tin, phân tích protocol, địa chỉ nguồn/đích và nội dung dữ liệu.</p>
-                    <button class="btn">Phân Tích</button>
+                    <a href="${pageContext.request.contextPath}/upload" class="btn">Phân Tích</a>
                 </div>
 
                 <div class="feature-card">
                     <div class="feature-icon">📊</div>
                     <h3>Thống Kê & Báo Cáo</h3>
                     <p>Xem thống kê lưu lượng mạng, tạo báo cáo và xuất dữ liệu phân tích chi tiết.</p>
-                    <button class="btn">Xem Báo Cáo</button>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">⚙️</div>
-                    <h3>Cài Đặt</h3>
-                    <p>Quản lý tài khoản, thay đổi mật khẩu và cấu hình hệ thống theo nhu cầu.</p>
-                    <button class="btn">Cài Đặt</button>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">📖</div>
-                    <h3>Hướng Dẫn</h3>
-                    <p>Xem hướng dẫn sử dụng hệ thống và tài liệu về phân tích gói tin mạng.</p>
-                    <button class="btn">Tìm Hiểu</button>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">💬</div>
-                    <h3>Hỗ Trợ</h3>
-                    <p>Liên hệ đội ngũ hỗ trợ nếu bạn gặp vấn đề hoặc cần trợ giúp hệ thống.</p>
-                    <button class="btn">Liên Hệ</button>
+                    <c:choose>
+                        <c:when test="${fileCount > 0}">
+                            <button class="btn" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">Xem Báo Cáo</button>
+                        </c:when>
+                        <c:otherwise>
+                            <button class="btn" disabled style="opacity: 0.5; cursor: not-allowed;">Xem Báo Cáo</button>
+                        </c:otherwise>
+                    </c:choose>
                 </div>
             </div>
         </div>

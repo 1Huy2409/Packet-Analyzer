@@ -3,6 +3,7 @@ package controller;
 import model.bean.FileUpload;
 import model.bean.User;
 import model.bo.FileUploadBO;
+import model.worker.AnalyzerWorker;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.MultipartConfig;
@@ -19,6 +20,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.stream.Collectors;
 
 @WebServlet("/upload")
 @MultipartConfig(fileSizeThreshold = 1024 * 1024 * 2, // 2MB
@@ -27,11 +30,18 @@ import java.util.List;
 )
 public class FileUploadServlet extends HttpServlet {
     private FileUploadBO fileUploadBO;
-    private static final String UPLOAD_DIR = "uploads";
+    // Thư mục lưu file cố định, ngoài target để không bị mất khi build lại
+    private static final String UPLOAD_DIR = System.getProperty("user.dir") + File.separator + "uploads";
 
     @Override
     public void init() throws ServletException {
         fileUploadBO = new FileUploadBO();
+        // Tạo thư mục uploads nếu chưa tồn tại
+        File uploadDir = new File(UPLOAD_DIR);
+        if (!uploadDir.exists()) {
+            uploadDir.mkdirs();
+            System.out.println("Created upload directory: " + UPLOAD_DIR);
+        }
     }
 
     @Override
@@ -63,73 +73,98 @@ public class FileUploadServlet extends HttpServlet {
         }
 
         User user = (User) session.getAttribute("user");
-        Part filePart = null;
 
         try {
-            // Lấy file từ request
-            filePart = request.getPart("file");
+            // Lấy tất cả file parts từ request (hỗ trợ multiple files)
+            List<Part> fileParts = request.getParts().stream()
+                    .filter(part -> "files".equals(part.getName()) && part.getSize() > 0)
+                    .collect(Collectors.toList());
 
-            if (filePart == null || filePart.getSize() == 0) {
-                request.setAttribute("error", "Vui lòng chọn file để upload!");
+            if (fileParts.isEmpty()) {
+                request.setAttribute("error", "Vui lòng chọn ít nhất một file để upload!");
                 doGet(request, response);
                 return;
             }
 
-            String fileName = getFileName(filePart);
+            int successCount = 0;
+            int failCount = 0;
+            ExecutorService executor = (ExecutorService) getServletContext().getAttribute("analyzerExecutor");
 
-            // Kiểm tra định dạng file (chỉ cho phép .pcap, .pcapng, .cap, .log, .txt, .csv)
-            if (!isValidFileType(fileName)) {
-                request.setAttribute("error", "Chỉ chấp nhận file .pcap, .pcapng, .cap, .log, .txt, .csv!");
-                doGet(request, response);
-                return;
+            // Xử lý từng file
+            for (Part filePart : fileParts) {
+                try {
+                    String fileName = getFileName(filePart);
+
+                    // Kiểm tra định dạng file
+                    if (!isValidFileType(fileName)) {
+                        System.out.println("Skipped invalid file type: " + fileName);
+                        failCount++;
+                        continue;
+                    }
+
+                    // Tạo tên file unique
+                    String uniqueFileName = System.currentTimeMillis() + "_" + fileName;
+                    Path filePath = Paths.get(UPLOAD_DIR, uniqueFileName);
+
+                    // Lưu file vào disk
+                    try (java.io.InputStream inputStream = filePart.getInputStream()) {
+                        Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
+                    }
+
+                    System.out.println("File saved to: " + filePath.toAbsolutePath());
+
+                    // Lưu thông tin vào database
+                    FileUpload fileUpload = new FileUpload();
+                    fileUpload.setUserId(user.getId());
+                    fileUpload.setFileName(uniqueFileName);
+                    fileUpload.setFileSize(filePart.getSize());
+                    fileUpload.setStatus("PENDING");
+
+                    if (fileUploadBO.saveFileUpload(fileUpload)) {
+                        System.out.println("File uploaded successfully: " + uniqueFileName);
+
+                        // Đẩy job phân tích vào thread pool
+                        if (executor != null) {
+                            executor.submit(
+                                    new AnalyzerWorker(fileUpload.getId(), filePath.toAbsolutePath().toString()));
+                            System.out.println("Analysis job submitted for file ID: " + fileUpload.getId());
+                        }
+                        successCount++;
+                    } else {
+                        // Xóa file nếu lưu database thất bại
+                        Files.deleteIfExists(filePath);
+                        failCount++;
+                    }
+
+                } catch (Exception e) {
+                    System.out.println("Error processing file: " + e.getMessage());
+                    e.printStackTrace();
+                    failCount++;
+                } finally {
+                    // Cleanup file part
+                    try {
+                        filePart.delete();
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+                }
             }
 
-            // Tạo thư mục upload nếu chưa tồn tại
-            String applicationPath = request.getServletContext().getRealPath("");
-            String uploadPath = applicationPath + File.separator + UPLOAD_DIR;
-            File uploadDir = new File(uploadPath);
-            if (!uploadDir.exists()) {
-                uploadDir.mkdirs();
-            }
-
-            // Tạo tên file unique để tránh trùng lặp
-            String uniqueFileName = System.currentTimeMillis() + "_" + fileName;
-            Path filePath = Paths.get(uploadPath, uniqueFileName);
-
-            // Lưu file vào thư mục uploads với try-with-resources để đảm bảo đóng stream
-            try (java.io.InputStream inputStream = filePart.getInputStream()) {
-                Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
-            }
-
-            // Lưu thông tin vào database
-            FileUpload fileUpload = new FileUpload();
-            fileUpload.setUserId(user.getId());
-            fileUpload.setFileName(uniqueFileName);
-            fileUpload.setFileSize(filePart.getSize());
-            fileUpload.setStatus("COMPLETED");
-
-            if (fileUploadBO.saveFileUpload(fileUpload)) {
-                System.out.println("File uploaded successfully: " + uniqueFileName);
-                request.setAttribute("success", "Upload file thành công!");
+            // Hiển thị thông báo kết quả
+            if (successCount > 0 && failCount == 0) {
+                request.setAttribute("success",
+                        String.format("✓ Upload thành công %d file! Đang phân tích...", successCount));
+            } else if (successCount > 0 && failCount > 0) {
+                request.setAttribute("success",
+                        String.format("Upload thành công %d file, thất bại %d file", successCount, failCount));
             } else {
-                // Xóa file nếu lưu database thất bại
-                Files.deleteIfExists(filePath);
-                request.setAttribute("error", "Lỗi khi lưu thông tin file!");
+                request.setAttribute("error", "Không thể upload file. Vui lòng kiểm tra định dạng file!");
             }
 
         } catch (Exception e) {
             System.out.println("Upload error: " + e.getMessage());
             e.printStackTrace();
             request.setAttribute("error", "Lỗi khi upload file: " + e.getMessage());
-        } finally {
-            // Đảm bảo xóa file Part để giải phóng tài nguyên
-            if (filePart != null) {
-                try {
-                    filePart.delete();
-                } catch (Exception e) {
-                    // Ignore - Tomcat sẽ tự dọn dẹp
-                }
-            }
         }
 
         doGet(request, response);
