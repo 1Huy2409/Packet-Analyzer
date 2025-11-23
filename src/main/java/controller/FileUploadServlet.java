@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
@@ -54,10 +55,50 @@ public class FileUploadServlet extends HttpServlet {
             return;
         }
 
-        // Lấy danh sách file đã upload
-        User user = (User) session.getAttribute("user");
-        List<FileUpload> files = fileUploadBO.getFilesByUserId(user.getId());
-        request.setAttribute("files", files);
+        // Lấy danh sách file vừa upload trong session và refresh status từ DB
+        @SuppressWarnings("unchecked")
+        List<FileUpload> sessionFiles = (List<FileUpload>) session.getAttribute("recentUploadedFiles");
+        if (sessionFiles != null && !sessionFiles.isEmpty()) {
+            // Refresh status từ DB cho các file trong session
+            List<FileUpload> refreshedFiles = new ArrayList<>();
+            boolean hasProcessing = false;
+            boolean allCompleted = true;
+            int completedCount = 0;
+            for (FileUpload file : sessionFiles) {
+                FileUpload dbFile = fileUploadBO.getFileById(file.getId());
+                if (dbFile != null) {
+                    // Cập nhật status và uploadTime từ DB
+                    file.setStatus(dbFile.getStatus());
+                    file.setUploadTime(dbFile.getUploadTime());
+                    refreshedFiles.add(file);
+                    if ("PROCESSING".equals(file.getStatus()) || "PENDING".equals(file.getStatus())) {
+                        hasProcessing = true;
+                        allCompleted = false;
+                    }
+                    if ("COMPLETED".equals(file.getStatus())) {
+                        completedCount++;
+                    } else {
+                        allCompleted = false;
+                    }
+                } else {
+                    // Nếu file không còn trong DB, bỏ qua
+                    refreshedFiles.add(file);
+                }
+            }
+            // Cập nhật lại session với danh sách đã refresh
+            session.setAttribute("recentUploadedFiles", refreshedFiles);
+            request.setAttribute("files", refreshedFiles);
+            // Nếu tất cả file đã COMPLETED, hiển thị thông báo thành công
+            if (allCompleted && completedCount > 0) {
+                request.setAttribute("success", String.format("✓ Upload thành công %d file!", completedCount));
+            } else if (hasProcessing) {
+                // Nếu còn file đang xử lý, giữ thông báo 'Đang phân tích...'
+                request.setAttribute("success", "⏳ Đang phân tích...");
+            }
+        } else {
+            sessionFiles = new ArrayList<>();
+            request.setAttribute("files", sessionFiles);
+        }
 
         request.getRequestDispatcher("/WEB-INF/views/upload.jsp").forward(request, response);
     }
@@ -89,6 +130,13 @@ public class FileUploadServlet extends HttpServlet {
             int successCount = 0;
             int failCount = 0;
             ExecutorService executor = (ExecutorService) getServletContext().getAttribute("analyzerExecutor");
+            
+            // Lấy danh sách file trong session
+            @SuppressWarnings("unchecked")
+            List<FileUpload> sessionFiles = (List<FileUpload>) session.getAttribute("recentUploadedFiles");
+            if (sessionFiles == null) {
+                sessionFiles = new ArrayList<>();
+            }
 
             // Xử lý từng file
             for (Part filePart : fileParts) {
@@ -123,6 +171,14 @@ public class FileUploadServlet extends HttpServlet {
                     if (fileUploadBO.saveFileUpload(fileUpload)) {
                         System.out.println("File uploaded successfully: " + uniqueFileName);
 
+                        // Lấy lại file từ DB để có đầy đủ thông tin (bao gồm upload_time)
+                        FileUpload savedFile = fileUploadBO.getFileById(fileUpload.getId());
+                        if (savedFile != null) {
+                            sessionFiles.add(savedFile);
+                        } else {
+                            sessionFiles.add(fileUpload);
+                        }
+
                         // Đẩy job phân tích vào thread pool
                         if (executor != null) {
                             executor.submit(
@@ -149,6 +205,9 @@ public class FileUploadServlet extends HttpServlet {
                     }
                 }
             }
+
+            // Lưu danh sách file vào session
+            session.setAttribute("recentUploadedFiles", sessionFiles);
 
             // Hiển thị thông báo kết quả
             if (successCount > 0 && failCount == 0) {
