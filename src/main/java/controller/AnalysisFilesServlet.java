@@ -1,7 +1,7 @@
 package controller;
 
-import model.bean.User;
 import model.bean.FileUpload;
+import model.bean.User;
 import model.bo.FileUploadBO;
 
 import javax.servlet.ServletException;
@@ -13,8 +13,8 @@ import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.util.List;
 
-@WebServlet("/dashboard")
-public class DashboardServlet extends HttpServlet {
+@WebServlet("/analysis-files")
+public class AnalysisFilesServlet extends HttpServlet {
     private FileUploadBO fileUploadBO;
 
     @Override
@@ -35,11 +35,11 @@ public class DashboardServlet extends HttpServlet {
         // Lấy thông tin user
         User user = (User) session.getAttribute("user");
 
-        // Đếm số file đã upload
-        int fileCount = fileUploadBO.countFilesByUserId(user.getId());
+        // Lấy danh sách file đã upload từ database
+        List<FileUpload> files = fileUploadBO.getFilesByUserId(user.getId());
+        request.setAttribute("files", files);
 
-        request.setAttribute("fileCount", fileCount);
-
-        request.getRequestDispatcher("/WEB-INF/views/dashboard.jsp").forward(request, response);
+        request.getRequestDispatcher("/WEB-INF/views/analysis-files.jsp").forward(request, response);
     }
 }
+
