@@ -469,18 +469,18 @@ response.sendRedirect(request.getContextPath() + "/login"); return; } %>
 
       <!-- Statistics Cards -->
       <div class="stats-grid">
-        <div class="stat-card">
+        <!-- <div class="stat-card">
           <div class="number">0</div>
           <div class="label">Gói tin đã phân tích</div>
-        </div>
+        </div> -->
         <div class="stat-card">
           <div class="number">${fileCount != null ? fileCount : 0}</div>
           <div class="label">File đã upload</div>
         </div>
-        <div class="stat-card success">
+        <!-- <div class="stat-card success">
           <div class="number">0</div>
           <div class="label">Báo cáo đã tạo</div>
-        </div>
+        </div> -->
       </div>
 
       <!-- Main Features Section -->

@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @WebServlet("/upload")
 @MultipartConfig(fileSizeThreshold = 1024 * 1024 * 2, // 2MB
         maxFileSize = 1024 * 1024 * 500, // 500MB
-        maxRequestSize = 1024 * 1024 * 1024 // 1GB
+        maxRequestSize = 1500L * 1024L * 1024L // 1.5GB
 )
 public class FileUploadServlet extends HttpServlet {
     private FileUploadBO fileUploadBO;
@@ -226,7 +226,9 @@ public class FileUploadServlet extends HttpServlet {
             request.setAttribute("error", "Lỗi khi upload file: " + e.getMessage());
         }
 
-        doGet(request, response);
+        // doGet(request, response);
+        response.sendRedirect(request.getContextPath() + "/upload");
+
     }
 
     // Lấy tên file từ Part

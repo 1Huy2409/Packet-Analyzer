@@ -22,6 +22,7 @@ public class AnalyzerWorker implements Runnable {
 
     @Override
     public void run() {
+        System.out.println("[AnalyzerWorker] Thread: " + Thread.currentThread().getName() + " is processing file ID: " + fileId);
 
         long start = System.currentTimeMillis();
 
