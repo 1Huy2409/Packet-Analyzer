@@ -13,7 +13,7 @@ public class AnalyzerWorker implements Runnable {
     private final String filePath;
 
     private final FileUploadBO fileUploadBO = new FileUploadBO();
-    private final AnalysisResultDAO resultDAO = new AnalysisResultDAO();
+    private final model.bo.AnalysisResultBO resultBO = new model.bo.AnalysisResultBO();
 
     public AnalyzerWorker(int fileId, String filePath) {
         this.fileId = fileId;
@@ -22,7 +22,7 @@ public class AnalyzerWorker implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("[AnalyzerWorker] Thread: " + Thread.currentThread().getName() + " is processing file ID: " + fileId);
+        System.out.println("[AnalyzerWorker] Thread: " + Thread.currentThread().getName() + " is processing file ID: " + fileId);   
 
         long start = System.currentTimeMillis();
 
@@ -135,8 +135,8 @@ public class AnalyzerWorker implements Runnable {
             System.out.println(
                     "[AnalyzerWorker] TCP flows: " + tcpFlows + ", UDP flows: " + udpFlows + ", Other: " + otherFlows);
 
-            // Lưu vào DB
-            boolean saved = resultDAO.insert(result);
+            // Lưu vào DB qua BO
+            boolean saved = resultBO.saveResult(result);
 
             if (saved) {
                 fileUploadBO.updateStatus(fileId, "COMPLETED");
