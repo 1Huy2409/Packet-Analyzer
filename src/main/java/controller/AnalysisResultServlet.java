@@ -3,7 +3,7 @@ package controller;
 import model.bean.AnalysisResult;
 import model.bean.FileUpload;
 import model.bean.User;
-import model.dao.AnalysisResultDAO;
+import model.bo.AnalysisResultBO;
 import model.bo.FileUploadBO;
 
 import javax.servlet.ServletException;
@@ -16,12 +16,12 @@ import java.io.IOException;
 
 @WebServlet("/analysis-result")
 public class AnalysisResultServlet extends HttpServlet {
-    private AnalysisResultDAO analysisResultDAO;
+    private AnalysisResultBO analysisResultBO;
     private FileUploadBO fileUploadBO;
 
     @Override
     public void init() throws ServletException {
-        analysisResultDAO = new AnalysisResultDAO();
+        analysisResultBO = new AnalysisResultBO();
         fileUploadBO = new FileUploadBO();
     }
 
@@ -62,7 +62,7 @@ public class AnalysisResultServlet extends HttpServlet {
             }
 
             // Lấy kết quả phân tích
-            AnalysisResult result = analysisResultDAO.getByFileId(fileId);
+            AnalysisResult result = analysisResultBO.getResultByFileId(fileId);
 
             request.setAttribute("file", file);
             request.setAttribute("result", result);

@@ -179,12 +179,8 @@ public class FileUploadServlet extends HttpServlet {
                             sessionFiles.add(fileUpload);
                         }
 
-                        // Đẩy job phân tích vào thread pool
-                        if (executor != null) {
-                            executor.submit(
-                                    new AnalyzerWorker(fileUpload.getId(), filePath.toAbsolutePath().toString()));
-                            System.out.println("Analysis job submitted for file ID: " + fileUpload.getId());
-                        }
+                        // Đẩy job phân tích qua BO
+                        fileUploadBO.submitAnalysisJob(fileUpload.getId(), filePath.toAbsolutePath().toString(), executor);
                         successCount++;
                     } else {
                         // Xóa file nếu lưu database thất bại
