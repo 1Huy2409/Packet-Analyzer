@@ -8,6 +8,14 @@ import java.util.List;
 public class FileUploadBO {
     private FileUploadDao fileUploadDao;
 
+    // Submit job phân tích vào thread pool
+    public void submitAnalysisJob(int fileId, String filePath, java.util.concurrent.ExecutorService executor) {
+        if (executor != null) {
+            executor.submit(new model.worker.AnalyzerWorker(fileId, filePath));
+            System.out.println("Analysis job submitted for file ID: " + fileId);
+        }
+    }
+
     public FileUploadBO() {
         this.fileUploadDao = new FileUploadDao();
     }

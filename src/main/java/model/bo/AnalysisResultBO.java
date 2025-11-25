@@ -9,4 +9,7 @@ public class AnalysisResultBO {
     public boolean saveResult(AnalysisResult result) {
         return dao.insert(result);
     }
+    public AnalysisResult getResultByFileId(int fileId) {
+        return dao.getByFileId(fileId);
+    }
 }
